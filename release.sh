@@ -4,12 +4,22 @@
 addon_dir=$(pwd)
 # echo $addon_dir
 
+
+
+# Load API tokens.
+# https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+source "$SCRIPT_DIR/include_tokens.sh"
+
+
+
+
 mkdir -p "$addon_dir/.release"
 
 
 
 ### Create changelog.
-echo "Create changelog..."
+echo "Creating changelog..."
 
 
 changelog="$addon_dir/.release/CHANGELOG.txt"
@@ -72,7 +82,8 @@ echo "$(<"$changelog")"
 echo
 
 echo "...done."
-echo ""
+echo
+echo
 
 
 
@@ -90,7 +101,7 @@ zip_file=$projectName\_$projectVersion.zip
 zip -r $zip_file $projectName >/dev/null
 
 echo "...done."
-echo ""
+echo
 
 
 
@@ -187,6 +198,7 @@ result=$( curl -sS --ipv4 --retry 3 --retry-delay 10 \
 # echo $result
 if [ $result = 202 ]; then
   echo "...success!"
+  echo
   rm -f "$result_file"
 else
 	echo "Error! ($result)"
@@ -272,6 +284,7 @@ result=$( echo "$cf_metadata" | curl -sS --ipv4 --retry 3 --retry-delay 10 \
 # echo $result
 if [ $result = 200 ]; then
   echo "...success!"
+  echo
   rm -f "$result_file"
 else
 	echo "Error! ($result)"
