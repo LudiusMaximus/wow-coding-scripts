@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
 
 
-# TODO: Remove!!!! 
-WOWI_API_TOKEN="2b7ce981f864c7cecf560bb9005393a4165e74d31673b41b7edef4eb92764294"
-echo $WOWI_API_TOKEN
-
-CF_API_KEY=54dd3398-c56c-43ac-9c76-1209817458e6
-echo $CF_API_KEY
-
-
-
 addon_dir=$(pwd)
 # echo $addon_dir
 
