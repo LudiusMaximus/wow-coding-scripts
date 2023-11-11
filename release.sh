@@ -269,8 +269,6 @@ result_file="$addon_dir/.release/curseforge_curl_result.json"
 # --ipv4         Otherwise it takes a long time trying ipv6 apparently.
 # --trace-ascii  To print the payload that is actually sent.
 
-pwd
-
 result=$( echo "$cf_metadata" | curl -sS --ipv4 --retry 3 --retry-delay 10 \
     -w "%{http_code}" -o "$result_file" \
     -H "x-api-token: $CF_API_KEY" \
