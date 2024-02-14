@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
 
+# In a fresh WSL make sure to:
+# sudo apt install zip
+# sudo apt install jq
+
+
+
 addon_dir=$(pwd)
 # echo $addon_dir
 

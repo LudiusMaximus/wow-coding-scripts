@@ -5,6 +5,12 @@
 # it will download the stated libs and copy them into the addon's folder.
 
 
+# In a fresh WSL make sure to install svn like this:
+# sudo apt update
+# sudo apt full-upgrade
+# sudo apt autoremove
+# sudo apt install subversion
+
 
 
 # The following allows communication between the background function checkout_external and main process.
@@ -561,6 +567,10 @@ processPkgmeta() {
       topDirName="${source%/}"
       topDirName="${topDirName##*/}"
       # echo $topDirName
+      
+      # Needed, because otherwise we might get this error:
+      # find: failed to save initial working directory: No such file or directory
+      cd .
       
       # find "$source" \( -name ".*" -a ! -name "." \) -prune -o ! -name "$topDirName" -print
       find "$source" \( -name ".*" -a ! -name "." \) -prune -o ! -name "$topDirName" -print | while read -r line; do
