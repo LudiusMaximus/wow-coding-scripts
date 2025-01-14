@@ -545,6 +545,12 @@ processPkgmeta() {
       local source="${toCopy[$i]}"
       local target="$1/$i/"
     
+			# Check if the directory exists
+			if [ ! -d "$target" ]; then
+				# Create the directory if it doesn't exist
+				mkdir -p "$target"
+			fi
+		
       cd "$target"
       if [ -d ".git" ] || [ -f ".git" ]; then
         tput setaf 9
