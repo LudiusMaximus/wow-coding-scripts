@@ -96,7 +96,7 @@ for sometag in $alltags; do
     # Process tagmessage line by line to make the text appear as intended in markdown.
     process_tag_message "$tagmessage" "$changelog" "$changelog_wowi"
     
-    echo >> "$changelog"
+    echo "  " >> "$changelog"
     echo >> "$changelog_wowi"
 
     if [ "$tag_count" -le "$max_tags" ]; then
