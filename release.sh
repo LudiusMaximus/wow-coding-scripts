@@ -212,56 +212,58 @@ done
 
 
 
+# Not all of my projects are already on Wago.
+# So check if a Wago ID was found in the TOC files.
+if [ -n "$wago_id" ]; then
 
+  ### Upload to Wago.
+  # https://docs.wago.io/
 
-### Upload to Wago.
-# https://docs.wago.io/
+  echo "Uploading to Wago..."
 
-echo "Uploading to Wago..."
+  # Get the list of available game versions.
+  wago_game_versions=$( curl -s https://addons.wago.io/api/data/game | jq -c '.patches')
+  # echo $wago_game_versions
 
-# Get the list of available game versions.
-wago_game_versions=$( curl -s https://addons.wago.io/api/data/game | jq -c '.patches')
-# echo $wago_game_versions
-
-# Go through all game types ("retail", "classic", etc.) in wago_game_versions
-# and create the support properties string.
-wago_support_properties=""
-for wago_type_quoted in $(jq -c 'keys[]' <<< "$wago_game_versions")
-do
-  wago_type=$(echo "$wago_type_quoted" | tr -d '"') # Remove quotes
-  wago_type_versions=$(jq --arg t "$wago_type" -c '.[$t]' <<< "$wago_game_versions")
-  
-  current_type_support_property="\"supported_${wago_type}_patches\": ["
-  match_found=false # Flag to track if a match was found for this type.
-  
-  # Go through game_versions of our addon and check if it is among wago_type_versions.
-  for game_version in ${game_versions//,/ }
-  do   
-    # Use jq to check if game_version exists in wago_type_versions.
-    if jq --arg v "$game_version" -e 'contains([$v])' <<< "$wago_type_versions" >/dev/null; then
-      match_found=true
-      current_type_support_property+="\"$game_version\","
+  # Go through all game types ("retail", "classic", etc.) in wago_game_versions
+  # and create the support properties string.
+  wago_support_properties=""
+  for wago_type_quoted in $(jq -c 'keys[]' <<< "$wago_game_versions")
+  do
+    wago_type=$(echo "$wago_type_quoted" | tr -d '"') # Remove quotes
+    wago_type_versions=$(jq --arg t "$wago_type" -c '.[$t]' <<< "$wago_game_versions")
+    
+    current_type_support_property="\"supported_${wago_type}_patches\": ["
+    match_found=false # Flag to track if a match was found for this type.
+    
+    # Go through game_versions of our addon and check if it is among wago_type_versions.
+    for game_version in ${game_versions//,/ }
+    do   
+      # Use jq to check if game_version exists in wago_type_versions.
+      if jq --arg v "$game_version" -e 'contains([$v])' <<< "$wago_type_versions" >/dev/null; then
+        match_found=true
+        current_type_support_property+="\"$game_version\","
+      fi
+    done
+    
+    current_type_support_property=$(echo "$current_type_support_property" | sed 's/,*$//g')
+    current_type_support_property+="]"
+    # echo "$current_type_support_property"
+    
+    # Add to wago_support_properties only if a match was found.
+    if $match_found; then
+      if [ -z "$wago_support_properties" ]; then
+        wago_support_properties="$current_type_support_property"
+      else
+        wago_support_properties="$wago_support_properties, $current_type_support_property"
+      fi
     fi
+    
   done
-  
-  current_type_support_property=$(echo "$current_type_support_property" | sed 's/,*$//g')
-  current_type_support_property+="]"
-  # echo "$current_type_support_property"
-  
-  # Add to wago_support_properties only if a match was found.
-  if $match_found; then
-    if [ -z "$wago_support_properties" ]; then
-      wago_support_properties="$current_type_support_property"
-    else
-      wago_support_properties="$wago_support_properties, $current_type_support_property"
-    fi
-  fi
-  
-done
 
 
-# https://unix.stackexchange.com/questions/360800/what-does-eoc-means
-wago_metadata=$( cat <<EOF
+  # https://unix.stackexchange.com/questions/360800/what-does-eoc-means
+  wago_metadata=$( cat <<EOF
 {
   "label": "$projectVersion",
   "stability": "stable",
@@ -269,34 +271,34 @@ wago_metadata=$( cat <<EOF
   $wago_support_properties
 }
 EOF
-)
-# echo $wago_metadata
+  )
+  # echo $wago_metadata
 
 
 
-result_file="$addon_dir/.release/wago_curl_result.json"
+  result_file="$addon_dir/.release/wago_curl_result.json"
 
-result=$( echo "$wago_metadata" | curl -sS --ipv4 --retry 3 --retry-delay 10 \
-			-w "%{http_code}" -o "$result_file" \
-			-H "authorization: Bearer $WAGO_API_KEY" \
-			-H "accept: application/json" \
-			-F "metadata=</dev/stdin" \
-			-F "file=@$addon_dir/.release/$zip_file" \
-			"https://addons.wago.io/api/projects/$wago_id/version")
+  result=$( echo "$wago_metadata" | curl -sS --ipv4 --retry 3 --retry-delay 10 \
+        -w "%{http_code}" -o "$result_file" \
+        -H "authorization: Bearer $WAGO_API_KEY" \
+        -H "accept: application/json" \
+        -F "metadata=</dev/stdin" \
+        -F "file=@$addon_dir/.release/$zip_file" \
+        "https://addons.wago.io/api/projects/$wago_id/version")
 
-# echo $result
+  # echo $result
 
-if [ $result = 201 ]; then
-  echo "...success!"
-  echo
-  rm -f "$result_file"
-else
-	echo "Error! ($result)"
-	echo "$(<"$result_file")"
-	exit
+  if [ $result = 201 ]; then
+    echo "...success!"
+    echo
+    rm -f "$result_file"
+  else
+    echo "Error! ($result)"
+    echo "$(<"$result_file")"
+    exit
+  fi
+
 fi
-
-
 
 
 
