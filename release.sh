@@ -302,45 +302,49 @@ fi
 
 
 
-### Upload to WoW-Interface.
-# https://www.wowinterface.com/forums/showthread.php?t=51835
-# To check which game versions there are: https://api.wowinterface.com/addons/compatible.json
+# Not all of my projects are already on WoW-Interface.
+# So check if a WOWI ID was found in the TOC files.
+if [ -n "$wowi_id" ]; then
 
-echo "Uploading to WoW-Interface..."
+  ### Upload to WoW-Interface.
+  # https://www.wowinterface.com/forums/showthread.php?t=51835
+  # To check which game versions there are: https://api.wowinterface.com/addons/compatible.json
 
-wowi_args=()
-wowi_args+=(-F "id=$wowi_id")
-wowi_args+=(-F "version=$projectVersion")
-wowi_args+=(-F "changelog=<$changelog_wowi")
-wowi_args+=(-F "updatefile=@$addon_dir/.release/$zip_file")
-wowi_args+=(-F "compatible=$game_versions")
+  echo "Uploading to WoW-Interface..."
 
-# echo "${wowi_args[@]}"
+  wowi_args=()
+  wowi_args+=(-F "id=$wowi_id")
+  wowi_args+=(-F "version=$projectVersion")
+  wowi_args+=(-F "changelog=<$changelog_wowi")
+  wowi_args+=(-F "updatefile=@$addon_dir/.release/$zip_file")
+  wowi_args+=(-F "compatible=$game_versions")
 
-result_file="$addon_dir/.release/wowi_curl_result.json"
+  # echo "${wowi_args[@]}"
 
-# -sS     Run curl in silent mode, and show no output unless there is an error.
-# --ipv4  Otherwise it takes a long time trying ipv6 apparently.
+  result_file="$addon_dir/.release/wowi_curl_result.json"
 
-result=$( curl -sS --ipv4 --retry 3 --retry-delay 10 \
-					-w "%{response_code}" -o "$result_file" \
-					-H "x-api-token: $WOWI_API_TOKEN" \
-					"${wowi_args[@]}" \
-					"https://api.wowinterface.com/addons/update" )
+  # -sS     Run curl in silent mode, and show no output unless there is an error.
+  # --ipv4  Otherwise it takes a long time trying ipv6 apparently.
+
+  result=$( curl -sS --ipv4 --retry 3 --retry-delay 10 \
+            -w "%{response_code}" -o "$result_file" \
+            -H "x-api-token: $WOWI_API_TOKEN" \
+            "${wowi_args[@]}" \
+            "https://api.wowinterface.com/addons/update" )
 
 
-# echo $result
-if [ $result = 202 ]; then
-  echo "...success!"
-  echo
-  rm -f "$result_file"
-else
-	echo "Error! ($result)"
-	echo "$(<"$result_file")"
-	exit
+  # echo $result
+  if [ $result = 202 ]; then
+    echo "...success!"
+    echo
+    rm -f "$result_file"
+  else
+    echo "Error! ($result)"
+    echo "$(<"$result_file")"
+    exit
+  fi
+
 fi
-
-
 
 
 
