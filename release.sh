@@ -132,6 +132,21 @@ rsync -av . "$addon_dir/.release/$projectName" --exclude ".*" --exclude "*.bat" 
 cd "$addon_dir/.release/$projectName"
 sed -i "s/@project-version@/$projectVersion/g" *.toc
 
+# Also replace @project-version@ in lib .toc files with their own versions
+if [ -d "Libs" ]; then
+  for lib_toc in $(find Libs -name "*.toc" -type f); do
+    lib_dir=$(dirname "$lib_toc")
+    # Check if this lib directory is a git repository
+    if [ -d "$addon_dir/$lib_dir/.git" ]; then
+      # Get the version from the lib's own git repository
+      lib_version=$(cd "$addon_dir/$lib_dir" && git describe 2>/dev/null)
+      if [ -n "$lib_version" ]; then
+        sed -i "s/@project-version@/$lib_version/g" "$lib_toc"
+      fi
+    fi
+  done
+fi
+
 cd "$addon_dir/.release"
 zip_file=$projectName\_$projectVersion.zip
 zip -r $zip_file $projectName >/dev/null
