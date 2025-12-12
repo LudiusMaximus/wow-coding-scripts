@@ -6,17 +6,56 @@
 # Maximum number of parallel jobs
 MAX_JOBS=8
 
+# Temporary directory for synchronization
+TEMP_DIR=$(mktemp -d)
+MUTEX_DIR="$TEMP_DIR/mutex"
+
+# Cleanup function
+cleanup() {
+  rm -rf "$TEMP_DIR"
+}
+
+# Ensure cleanup on exit, interrupt, or termination
+trap cleanup EXIT INT TERM
+
+# Acquire mutex (blocks until available)
+acquire_lock() {
+  while ! mkdir "$MUTEX_DIR" 2>/dev/null; do
+    sleep 0.1
+  done
+}
+
+# Release mutex
+release_lock() {
+  rmdir "$MUTEX_DIR" 2>/dev/null
+}
+
 # Function to update a single repo
 updateRepo() {
   local repo_path=$1
-  echo "Updating: $repo_path"
+  
+  # Do the git operations (this runs in parallel)
   cd "$repo_path"
-  git fetch --tags --prune --prune-tags 2>&1 | sed "s|^|[$repo_path] |"
-  git pull --all --ff-only 2>&1 | sed "s|^|[$repo_path] |"
+  local fetch_output=$(git fetch --tags --prune --prune-tags 2>&1)
+  local pull_output=$(git pull --all --ff-only 2>&1)
+  
+  # Acquire lock before printing (serializes output only)
+  acquire_lock
+  
+  echo ""
+  echo "Updating: $repo_path"
+  [ -n "$fetch_output" ] && echo "$fetch_output"
+  [ -n "$pull_output" ] && echo "$pull_output"
   echo "Completed: $repo_path"
+  
+  release_lock
 }
 
 export -f updateRepo
+export TEMP_DIR
+export MUTEX_DIR
+export -f acquire_lock
+export -f release_lock
 
 # Find all git repositories
 findRepos() {
@@ -45,9 +84,8 @@ fi
 
 repo_count=$(echo "$repos" | wc -l)
 echo "Found $repo_count repositories. Updating with $MAX_JOBS parallel jobs..."
-echo ""
 
-# Run updates in parallel
+# Launch all jobs in parallel with limited concurrency
 echo "$repos" | xargs -P "$MAX_JOBS" -I {} bash -c 'updateRepo "$@"' _ {}
 
 echo ""
