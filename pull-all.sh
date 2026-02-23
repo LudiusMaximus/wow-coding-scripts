@@ -36,8 +36,8 @@ updateRepo() {
   
   # Do the git operations (this runs in parallel)
   cd "$repo_path"
-  local fetch_output=$(git fetch --tags --prune --prune-tags 2>&1)
-  local pull_output=$(git pull --all --ff-only 2>&1)
+  local fetch_output=$(git fetch --force --tags --prune --prune-tags 2>&1)
+  local pull_output=$(git pull --all --no-rebase 2>&1)
   
   # Acquire lock before printing (serializes output only)
   acquire_lock
