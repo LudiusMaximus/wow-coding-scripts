@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 
 # In a fresh WSL make sure to:
@@ -70,9 +71,22 @@ process_tag_message() {
 }
 
 
+currentbranch=$(git branch --show-current)
+
+# Warn if tags exist that are not reachable from the current branch -- this can happen
+# after a history rewrite (e.g. git rebase --root) that leaves old tags stranded,
+# which would silently truncate the changelog below.
+total_tag_count=$(git tag -l | wc -l)
+merged_tag_count=$(git tag --merged "$currentbranch" | wc -l)
+if [ "$total_tag_count" -gt 0 ] && [ "$merged_tag_count" -lt $((total_tag_count / 2)) ]; then
+  echo "WARNING: only $merged_tag_count of $total_tag_count tags are reachable from '$currentbranch'."
+  echo "History may have been rewritten, leaving old tags stranded. Changelog will be incomplete."
+  echo
+fi
+
 # Get the most recent tags of this branch ordered from newest to oldest.
 max_tags=15
-alltags=$(git tag --sort=-creatordate --merged $currentbranch | head -n $((max_tags+1)))
+alltags=$(git tag --sort=-creatordate --merged "$currentbranch" | head -n $((max_tags+1)))
 
 lasttag=
 tag_count=0
@@ -80,35 +94,35 @@ for sometag in $alltags; do
   tag_count=$((tag_count + 1))
 
   if [ -z "$lasttag" ]; then
-    
-    echo "\### $sometag ($(git log -1 --format=%ai $sometag)) ###  " >> "$changelog"
-    echo "### $sometag ($(git log -1 --format=%ai $sometag)) ###" >> "$changelog_wowi"
+
+    echo "\### $sometag ($(git log -1 --format=%ai "$sometag")) ###  " >> "$changelog"
+    echo "### $sometag ($(git log -1 --format=%ai "$sometag")) ###" >> "$changelog_wowi"
     lasttag=$sometag
-    
+
   else
 
     # Print the github diff link.
     echo "($project_github_url/compare/$sometag...$lasttag)  " >> "$changelog"
     echo "([url=\"$project_github_url/compare/$sometag...$lasttag\"]$project_github_url/compare/$sometag...$lasttag[/url])" >> "$changelog_wowi"
     # Print the annotation of the tag. (If the tag has no annotation the message of the last commit is printed.)
-    tagmessage=$(git tag -l --format='%(contents)' $lasttag)
-    
+    tagmessage=$(git tag -l --format='%(contents)' "$lasttag")
+
     # Process tagmessage line by line to make the text appear as intended in markdown.
     process_tag_message "$tagmessage" "$changelog" "$changelog_wowi"
-    
+
     echo "  " >> "$changelog"
     echo >> "$changelog_wowi"
 
     if [ "$tag_count" -le "$max_tags" ]; then
-      echo "\### $sometag ($(git log -1 --format=%ai $sometag)) ###  " >> "$changelog"
-      echo "### $sometag ($(git log -1 --format=%ai $sometag)) ###" >> "$changelog_wowi"
+      echo "\### $sometag ($(git log -1 --format=%ai "$sometag")) ###  " >> "$changelog"
+      echo "### $sometag ($(git log -1 --format=%ai "$sometag")) ###" >> "$changelog_wowi"
     fi
     lasttag=$sometag
   fi
-  
+
 done
 
-if [ "$tag_count" -le "$max_tags" ]; then
+if [ "$tag_count" -le "$max_tags" ] && [ -n "$lasttag" ]; then
   tagmessage=$(git tag -l --format='%(contents)' "$lasttag")
   process_tag_message "$tagmessage" "$changelog" "$changelog_wowi"
 fi
@@ -139,7 +153,7 @@ if [ -d "Libs" ]; then
     # Check if this lib directory is a git repository
     if [ -d "$addon_dir/$lib_dir/.git" ]; then
       # Get the version from the lib's own git repository
-      lib_version=$(cd "$addon_dir/$lib_dir" && git describe 2>/dev/null)
+      lib_version=$(cd "$addon_dir/$lib_dir" && git describe 2>/dev/null || true)
       if [ -n "$lib_version" ]; then
         sed -i "s/@project-version@/$lib_version/g" "$lib_toc"
       fi
@@ -148,8 +162,8 @@ if [ -d "Libs" ]; then
 fi
 
 cd "$addon_dir/.release"
-zip_file=$projectName\_$projectVersion.zip
-zip -r $zip_file $projectName >/dev/null
+zip_file="${projectName}_${projectVersion}.zip"
+zip -r "$zip_file" "$projectName" >/dev/null
 
 echo "...done."
 echo
@@ -164,10 +178,15 @@ echo
 
 cd "$addon_dir"
 
+game_versions=""
+curse_id=""
+wowi_id=""
+wago_id=""
+
 for toc_file in *.toc; do
 
   # echo $toc_file
-  toc_version=$( grep "## Interface" $toc_file | cut -d' ' -f3 | tr -d '\r' )
+  toc_version=$( grep "## Interface" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
   # echo $toc_version
   
   major="${toc_version:0: -4}"
@@ -184,36 +203,36 @@ for toc_file in *.toc; do
   
   toc_version="$major.$minor.$patch"
   # echo $toc_version
-  if [ -z $game_versions ]; then
+  if [ -z "$game_versions" ]; then
     game_versions="$toc_version"
   else
     game_versions+=",$toc_version"
   fi
-  
-  if [ -z $curse_id ]; then
-    curse_id=$( grep "## X-Curse-Project-ID" $toc_file | cut -d' ' -f3 | tr -d '\r' )
+
+  if [ -z "$curse_id" ]; then
+    curse_id=$( grep "## X-Curse-Project-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
   else
-    if [ $curse_id != $( grep "## X-Curse-Project-ID" $toc_file | cut -d' ' -f3 | tr -d '\r' ) ]; then
+    if [ "$curse_id" != "$( grep "## X-Curse-Project-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )" ]; then
       echo "ERROR: TOC files have different curse ids."
-      exit
+      exit 1
     fi
   fi
-  
-  if [ -z $wowi_id ]; then
-    wowi_id=$( grep "## X-WoWI-ID" $toc_file | cut -d' ' -f3 | tr -d '\r' )
+
+  if [ -z "$wowi_id" ]; then
+    wowi_id=$( grep "## X-WoWI-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
   else
-    if [ $wowi_id != $( grep "## X-WoWI-ID" $toc_file | cut -d' ' -f3 | tr -d '\r' ) ]; then
+    if [ "$wowi_id" != "$( grep "## X-WoWI-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )" ]; then
       echo "ERROR: TOC files have different wowi ids."
-      exit
+      exit 1
     fi
   fi
-  
-  if [ -z $wago_id ]; then
-    wago_id=$( grep "## X-Wago-ID" $toc_file | cut -d' ' -f3 | tr -d '\r' )
+
+  if [ -z "$wago_id" ]; then
+    wago_id=$( grep "## X-Wago-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
   else
-    if [ $wago_id != $( grep "## X-Wago-ID" $toc_file | cut -d' ' -f3 | tr -d '\r' ) ]; then
+    if [ "$wago_id" != "$( grep "## X-Wago-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )" ]; then
       echo "ERROR: TOC files have different wago ids."
-      exit
+      exit 1
     fi
   fi
   
@@ -303,14 +322,14 @@ EOF
 
   # echo $result
 
-  if [ $result = 201 ]; then
+  if [ "$result" = "201" ]; then
     echo "...success!"
     echo
     rm -f "$result_file"
   else
     echo "Error! ($result)"
     echo "$(<"$result_file")"
-    exit
+    exit 1
   fi
 
 fi
@@ -349,14 +368,14 @@ if [ -n "$wowi_id" ]; then
 
 
   # echo $result
-  if [ $result = 202 ]; then
+  if [ "$result" = "202" ]; then
     echo "...success!"
     echo
     rm -f "$result_file"
   else
     echo "Error! ($result)"
     echo "$(<"$result_file")"
-    exit
+    exit 1
   fi
 
 fi
@@ -377,13 +396,14 @@ cf_game_versions=$( curl -s -H "x-api-token: $CF_API_KEY" https://wow.curseforge
 
 # Replace comma with blank to iterate.
 # https://stackoverflow.com/questions/27702452/loop-through-a-comma-separated-shell-variable
+cf_game_ids=""
 for game_version in ${game_versions//,/ }
 do
-    
-  cf_game_id=$( echo $cf_game_versions | jq --arg i "$game_version" '.[] | select(.name == $i) | .id')
+
+  cf_game_id=$( echo "$cf_game_versions" | jq --arg i "$game_version" '.[] | select(.name == $i) | .id')
   # echo "$game_version -> $cf_game_id "
-  
-  if [ -z $cf_game_ids ]; then
+
+  if [ -z "$cf_game_ids" ]; then
     cf_game_ids="$cf_game_id"
   else
     cf_game_ids+=",$cf_game_id"
@@ -433,12 +453,12 @@ result=$( echo "$cf_metadata" | curl -sS --ipv4 --retry 3 --retry-delay 10 \
 
 
 # echo $result
-if [ $result = 200 ]; then
+if [ "$result" = "200" ]; then
   echo "...success!"
   echo
   rm -f "$result_file"
 else
 	echo "Error! ($result)"
 	echo "$(<"$result_file")"
-	exit
+	exit 1
 fi

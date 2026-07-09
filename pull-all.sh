@@ -1,4 +1,5 @@
 #!/bin/bash
+set -uo pipefail
 
 # Call this script with a directory path as first argument.
 # It will traverse all subdirectories and pull every found git repo in parallel.
@@ -9,6 +10,8 @@ MAX_JOBS=8
 # Temporary directory for synchronization
 TEMP_DIR=$(mktemp -d)
 MUTEX_DIR="$TEMP_DIR/mutex"
+FAILED_FILE="$TEMP_DIR/failed"
+: > "$FAILED_FILE"
 
 # Cleanup function
 cleanup() {
@@ -32,28 +35,41 @@ release_lock() {
 
 # Function to update a single repo
 updateRepo() {
+  set -uo pipefail
   local repo_path=$1
-  
+
   # Do the git operations (this runs in parallel)
   cd "$repo_path"
-  local fetch_output=$(git fetch --force --tags --prune --prune-tags 2>&1)
-  local pull_output=$(git pull --all --no-rebase 2>&1)
-  
-  # Acquire lock before printing (serializes output only)
+
+  local fetch_status=0
+  local pull_status=0
+  local fetch_output
+  local pull_output
+  fetch_output=$(git fetch --force --tags --prune --prune-tags 2>&1) || fetch_status=$?
+  pull_output=$(git pull --all --no-rebase 2>&1) || pull_status=$?
+
+  # Acquire lock before printing (serializes output and the shared failure list)
   acquire_lock
-  
+
   echo ""
   echo "Updating: $repo_path"
   [ -n "$fetch_output" ] && echo "$fetch_output"
   [ -n "$pull_output" ] && echo "$pull_output"
-  echo "Completed: $repo_path"
-  
+
+  if [ "$fetch_status" -ne 0 ] || [ "$pull_status" -ne 0 ]; then
+    printf '\033[01;31mFAILED: %s (fetch=%s pull=%s)\033[0m\n' "$repo_path" "$fetch_status" "$pull_status"
+    echo "$repo_path" >> "$FAILED_FILE"
+  else
+    echo "Completed: $repo_path"
+  fi
+
   release_lock
 }
 
 export -f updateRepo
 export TEMP_DIR
 export MUTEX_DIR
+export FAILED_FILE
 export -f acquire_lock
 export -f release_lock
 
@@ -74,8 +90,8 @@ findRepos() {
 }
 
 # Main execution
-echo "Searching for git repositories in: $1"
-repos=$(findRepos "$1")
+echo "Searching for git repositories in: ${1:-}"
+repos=$(findRepos "${1:-}")
 
 if [ -z "$repos" ]; then
   echo "No git repositories found!"
@@ -89,5 +105,14 @@ echo "Found $repo_count repositories. Updating with $MAX_JOBS parallel jobs..."
 echo "$repos" | xargs -P "$MAX_JOBS" -I {} bash -c 'updateRepo "$@"' _ {}
 
 echo ""
+
+if [ -s "$FAILED_FILE" ]; then
+  fail_count=$(wc -l < "$FAILED_FILE")
+  echo "FAILED to update $fail_count of $repo_count repositories:"
+  cat "$FAILED_FILE"
+  echo ""
+  exit 1
+fi
+
 echo "All repositories updated!"
 
