@@ -210,7 +210,7 @@ for toc_file in *.toc; do
   fi
 
   if [ -z "$curse_id" ]; then
-    curse_id=$( grep "## X-Curse-Project-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
+    curse_id=$( grep "## X-Curse-Project-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' || true )
   else
     if [ "$curse_id" != "$( grep "## X-Curse-Project-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )" ]; then
       echo "ERROR: TOC files have different curse ids."
@@ -219,7 +219,7 @@ for toc_file in *.toc; do
   fi
 
   if [ -z "$wowi_id" ]; then
-    wowi_id=$( grep "## X-WoWI-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
+    wowi_id=$( grep "## X-WoWI-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' || true )
   else
     if [ "$wowi_id" != "$( grep "## X-WoWI-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )" ]; then
       echo "ERROR: TOC files have different wowi ids."
@@ -228,7 +228,7 @@ for toc_file in *.toc; do
   fi
 
   if [ -z "$wago_id" ]; then
-    wago_id=$( grep "## X-Wago-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
+    wago_id=$( grep "## X-Wago-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' || true )
   else
     if [ "$wago_id" != "$( grep "## X-Wago-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )" ]; then
       echo "ERROR: TOC files have different wago ids."
