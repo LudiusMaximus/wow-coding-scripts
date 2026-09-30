@@ -186,28 +186,34 @@ wago_id=""
 for toc_file in *.toc; do
 
   # echo $toc_file
-  toc_version=$( grep "## Interface" "$toc_file" | cut -d' ' -f3 | tr -d '\r' )
-  # echo $toc_version
+  # A single toc file can declare several interface versions in one comma separated line,
+  # which is how an addon covers all clients without one toc file per client.
+  toc_versions=$( grep "## Interface" "$toc_file" | cut -d':' -f2 | tr -d '\r' | tr ',' ' ' )
+  # echo $toc_versions
   
-  major="${toc_version:0: -4}"
-  minor="${toc_version:(${#toc_version}-4):2}"
-  patch="${toc_version:(${#toc_version}-2):2}"
-  # echo "$major $minor $patch"
+  for toc_version in $toc_versions; do
   
-  # Remove leading zeros.
-  # https://stackoverflow.com/questions/11123717/removing-leading-zeros-before-passing-a-shell-variable-to-another-command
-  major=$((10#$major))
-  minor=$((10#$minor))
-  patch=$((10#$patch))
-  # echo "$major $minor $patch"
+    major="${toc_version:0: -4}"
+    minor="${toc_version:(${#toc_version}-4):2}"
+    patch="${toc_version:(${#toc_version}-2):2}"
+    # echo "$major $minor $patch"
+    
+    # Remove leading zeros.
+    # https://stackoverflow.com/questions/11123717/removing-leading-zeros-before-passing-a-shell-variable-to-another-command
+    major=$((10#$major))
+    minor=$((10#$minor))
+    patch=$((10#$patch))
+    # echo "$major $minor $patch"
+    
+    toc_version="$major.$minor.$patch"
+    # echo $toc_version
+    if [ -z "$game_versions" ]; then
+      game_versions="$toc_version"
+    else
+      game_versions+=",$toc_version"
+    fi
   
-  toc_version="$major.$minor.$patch"
-  # echo $toc_version
-  if [ -z "$game_versions" ]; then
-    game_versions="$toc_version"
-  else
-    game_versions+=",$toc_version"
-  fi
+  done
 
   if [ -z "$curse_id" ]; then
     curse_id=$( grep "## X-Curse-Project-ID" "$toc_file" | cut -d' ' -f3 | tr -d '\r' || true )
