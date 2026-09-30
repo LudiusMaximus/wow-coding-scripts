@@ -22,6 +22,16 @@ rendevouz="/dev/shm/ludiusUpdateLibs"
 mutex="/tmp/ludiusMutex"
 
 
+# Never let a version control tool ask for credentials. Otherwise a lib that is listed in a .pkgmeta
+# but does not exist online yet (e.g. one we have only created locally so far) makes git block on a
+# "Username for 'https://github.com':" prompt and the whole script hangs.
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes}"
+# Empty value resets the credential helper list, so a configured helper (e.g. the Windows credential
+# manager) cannot pop up a dialog either.
+git_no_prompt=( -c credential.helper= )
+
+
 # Bare carriage-return character.
 carriage_return=$( printf "\r" )
 
@@ -230,19 +240,26 @@ checkout_external() {
 	_cqe_checkout_dir="$tmpdir/$_external_dir/"
 	mkdir -p "$_cqe_checkout_dir"
 	if [ "$_external_type" = "git" ]; then
+		# Check whether the remote is actually there before cloning. A lib that only exists locally
+		# so far (not pushed to github yet) would otherwise be retried three times and, without
+		# GIT_TERMINAL_PROMPT=0, block on a credential prompt.
+		if ! git "${git_no_prompt[@]}" ls-remote "$_external_uri" &>/dev/null; then
+			echo "Could not reach external $_external_uri (repository not found, private or offline)" >&2
+			return 1
+		fi
 		if [ -z "$_external_tag" ]; then
 			echo "Fetching latest version of external $_external_uri"
-			retry git clone -q --depth 1 "$_external_uri" "$_cqe_checkout_dir" || return 1
+			retry git "${git_no_prompt[@]}" clone -q --depth 1 "$_external_uri" "$_cqe_checkout_dir" || return 1
 		elif [ "$_external_tag" != "latest" ]; then
 			echo "Fetching $_external_checkout_type \"$_external_tag\" from external $_external_uri"
 			if [ "$_external_checkout_type" = "commit" ]; then
-				retry git clone -q "$_external_uri" "$_cqe_checkout_dir" || return 1
+				retry git "${git_no_prompt[@]}" clone -q "$_external_uri" "$_cqe_checkout_dir" || return 1
 				git -C "$_cqe_checkout_dir" checkout -q "$_external_tag" || return 1
 			else
-				git -c advice.detachedHead=false clone -q --depth 1 --branch "$_external_tag" "$_external_uri" "$_cqe_checkout_dir" || return 1
+				git "${git_no_prompt[@]}" -c advice.detachedHead=false clone -q --depth 1 --branch "$_external_tag" "$_external_uri" "$_cqe_checkout_dir" || return 1
 			fi
 		else # [ "$_external_tag" = "latest" ]; then
-			retry git clone -q --depth 50 "$_external_uri" "$_cqe_checkout_dir" || return 1
+			retry git "${git_no_prompt[@]}" clone -q --depth 50 "$_external_uri" "$_cqe_checkout_dir" || return 1
 			_external_tag=$( git -C "$_cqe_checkout_dir" for-each-ref refs/tags --sort=-creatordate --format=%\(refname:short\) --count=1 )
 			if [ -n "$_external_tag" ]; then
 				echo "Fetching tag \"$_external_tag\" from external $_external_uri"
@@ -268,7 +285,7 @@ checkout_external() {
 
 		if [ -z "$_external_tag" ]; then
 			echo "Fetching latest version of external $_external_uri"
-			retry svn checkout -q "$_external_uri" "$_cqe_checkout_dir" || return 1
+			retry svn checkout -q --non-interactive "$_external_uri" "$_cqe_checkout_dir" || return 1
 		else
 			_cqe_svn_tag_url="${_cqe_svn_trunk_url%/trunk}/tags"
 			if [ "$_external_tag" = "latest" ]; then
@@ -280,14 +297,14 @@ checkout_external() {
 			if [ "$_external_tag" = "latest" ]; then
 				echo "No tags found in $_cqe_svn_tag_url"
 				echo "Fetching latest version of external $_external_uri"
-				retry svn checkout -q "$_external_uri" "$_cqe_checkout_dir" || return 1
+				retry svn checkout -q --non-interactive "$_external_uri" "$_cqe_checkout_dir" || return 1
 			else
 				_cqe_external_uri="${_cqe_svn_tag_url}/$_external_tag"
 				if [ -n "$_cqe_svn_subdir" ]; then
 					_cqe_external_uri="${_cqe_external_uri}/$_cqe_svn_subdir"
 				fi
 				echo "Fetching tag \"$_external_tag\" from external $_cqe_external_uri"
-				retry svn checkout -q "$_cqe_external_uri" "$_cqe_checkout_dir" || return 1
+				retry svn checkout -q --non-interactive "$_cqe_external_uri" "$_cqe_checkout_dir" || return 1
 			fi
 		fi
 		set_info_svn "$_cqe_checkout_dir"
@@ -295,12 +312,12 @@ checkout_external() {
 	elif [ "$_external_type" = "hg" ]; then
 		if [ -z "$_external_tag" ]; then
 			echo "Fetching latest version of external $_external_uri"
-			retry hg clone -q "$_external_uri" "$_cqe_checkout_dir" || return 1
+			retry hg --noninteractive clone -q "$_external_uri" "$_cqe_checkout_dir" || return 1
 		elif [ "$_external_tag" != "latest" ]; then
 			echo "Fetching $_external_checkout_type \"$_external_tag\" from external $_external_uri"
-			retry hg clone -q --updaterev "$_external_tag" "$_external_uri" "$_cqe_checkout_dir" || return 1
+			retry hg --noninteractive clone -q --updaterev "$_external_tag" "$_external_uri" "$_cqe_checkout_dir" || return 1
 		else # [ "$_external_tag" = "latest" ]; then
-			retry hg clone -q "$_external_uri" "$_cqe_checkout_dir" || return 1
+			retry hg --noninteractive clone -q "$_external_uri" "$_cqe_checkout_dir" || return 1
 			_external_tag=$( hg --cwd "$_cqe_checkout_dir" log -r . --template '{latesttag}' )
 			if [ -n "$_external_tag" ]; then
 				echo "Fetching tag \"$_external_tag\" from external $_external_uri"
@@ -424,7 +441,10 @@ processPkgmeta() {
   # Clear data from previous directories.
   rm "$rendevouz" 2>/dev/null
   rmdir "$mutex" 2>/dev/null
-  
+  unset toCopy
+  declare -A toCopy
+  _external_warning=
+
   
   local pkgmeta_file="$1/.pkgmeta"
   
@@ -515,9 +535,9 @@ processPkgmeta() {
 				if ! kill -0 $pid 2>/dev/null; then
 					_external_output="$tmpdir/.$pid.externalout"
 					if ! wait $pid; then
-						_external_error=1
-						# wrap each line with a bright red color code
-						awk '{ printf "\033[01;31m%s\033[0m\n", $0 }' "$_external_output"
+						_external_warning=1
+						# wrap each line with a bright yellow color code
+						awk '{ printf "\033[01;33m%s\033[0m\n", $0 }' "$_external_output"
 						echo
 					else
 						start_group "$( head -n1 "$_external_output" )" "external.$pid"
@@ -530,16 +550,22 @@ processPkgmeta() {
 			done
 		done
 
-		if [ -n "$_external_error" ]; then
+		if [ -n "$_external_warning" ]; then
 			echo
-			echo "There was an error fetching externals :(" >&2
-			exit 1
+			# A lib may not be available online (yet), e.g. one that we have only created locally so far.
+			# That is no reason to abort: the other externals are still updated and the folder of the
+			# unavailable one is simply left as it is.
+			echo -e "\033[01;33mWarning: some externals could not be fetched. Their folders have been left untouched.\033[0m" >&2
+			echo
 		fi
 
 	
   
     # Get the directories stored during the background executions of checkout_external.
-    . "$rendevouz"
+    # If every external failed, there is no rendevouz file and nothing to copy.
+    if [ -f "$rendevouz" ]; then
+      . "$rendevouz"
+    fi
     for i in "${!toCopy[@]}"; do
     
       local source="${toCopy[$i]}"
@@ -594,7 +620,7 @@ processPkgmeta() {
       
     done
     
-    rm "$rendevouz"
+    rm "$rendevouz" 2>/dev/null
   
   fi
   
