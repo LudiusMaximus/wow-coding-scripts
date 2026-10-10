@@ -141,7 +141,17 @@ echo
 echo "Creating zip..."
 
 rm -rf "$addon_dir/.release/$projectName"
-rsync -av . "$addon_dir/.release/$projectName" --exclude ".*" --exclude "*.bat" --exclude "README.*" >/dev/null
+# What stays out of the zip is listed in package-excludes.txt: repository files,
+# and the folders libraries bring along that the game never loads, such as
+# LibStub's tests or Krowi_WorldMapButtons' _Packaging.
+rsync -av . "$addon_dir/.release/$projectName" --exclude-from="$SCRIPT_DIR/package-excludes.txt" >/dev/null
+
+# Leaving folders out by name is only safe as long as nothing loads from them, so
+# check the packed copy before zipping it.
+if ! bash "$SCRIPT_DIR/check-references.sh" "$addon_dir/.release/$projectName" "$SCRIPT_DIR/package-excludes.txt"; then
+  echo "Release aborted: see above." >&2
+  exit 1
+fi
 
 cd "$addon_dir/.release/$projectName"
 sed -i "s/@project-version@/$projectVersion/g" *.toc

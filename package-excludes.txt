@@ -1,0 +1,25 @@
+# What release.sh leaves out of an addon's zip. Read by rsync (--exclude-from),
+# so one pattern per line, and lines starting with # are comments.
+#
+# A pattern without a slash in front matches at any depth, so a folder listed
+# here is left out of the addon and of every library inside it alike.
+
+# Repository and tooling files.
+.*
+*.bat
+README.*
+
+# Folders that belong to a project's repository but are never loaded by the game.
+# Libraries pulled in whole bring theirs along: LibStub's tests, for instance,
+# and Krowi_WorldMapButtons' _Packaging, which holds its project page texts.
+# A trailing slash means folders only, never a file of the same name.
+#
+# check-references.sh refuses a release in which one of these folders turns out
+# to hold a file that a .toc or .xml loads after all.
+tests/
+Tests/
+test/
+Test/
+spec/
+specs/
+_Packaging/
