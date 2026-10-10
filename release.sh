@@ -20,6 +20,15 @@ source "$SCRIPT_DIR/include_tokens.sh"
 
 
 
+# A library has to raise its LibStub MINOR whenever its code changes, or LibStub
+# cannot tell this release from the last one. Checked before anything is built.
+# Addons pass without being told, as they track no library files of their own.
+if ! bash "$SCRIPT_DIR/check-minor.sh" "$addon_dir"; then
+  echo "Release aborted: see above." >&2
+  exit 1
+fi
+
+
 
 mkdir -p "$addon_dir/.release"
 
