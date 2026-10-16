@@ -28,6 +28,14 @@ if ! bash "$SCRIPT_DIR/check-minor.sh" "$addon_dir"; then
   exit 1
 fi
 
+# Development code lives in debug blocks, and @no-release@ marks anything that must
+# be undone first. A debug block that is switched on, or an @no-release@ marker,
+# refuses the release, so that nothing meant for development ships by accident.
+if ! bash "$SCRIPT_DIR/check-dev-code.sh" "$addon_dir"; then
+  echo "Release aborted: see above." >&2
+  exit 1
+fi
+
 
 
 mkdir -p "$addon_dir/.release"
